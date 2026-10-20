@@ -12,7 +12,19 @@ from jqfactor_analyzer.plot_utils import _use_chinese
 from functools import lru_cache
 
 
-dataapi = DataApi(allow_cache=True, show_progress=True)
+class _LazyDataApi(object):
+    """首次使用时才创建 DataApi (会导入 jqdatasdk), 避免 import jqfactor_analyzer 时就依赖 jqdatasdk"""
+
+    def __init__(self):
+        self._dataapi = None
+
+    def __getattr__(self, attr):
+        if self._dataapi is None:
+            self._dataapi = DataApi(allow_cache=True, show_progress=True)
+        return getattr(self._dataapi, attr)
+
+
+dataapi = _LazyDataApi()
 
 
 def get_factor_style_returns(factors=None, start_date=None, end_date=None,
@@ -311,7 +323,7 @@ class AttributionAnalysis():
                                                start_date=self.factor_returns.index[0],
                                                end_date=self.factor_returns.index[-1])
 
-        attr_daily_returns2bench = self.get_attr_daily_returns2bench("000905.XSHG")
+        attr_daily_returns2bench = self.get_attr_daily_returns2bench(index_symbol)
         # 假设持仓的现金用于购买指数时的净值
         position_with_cash_net = ((-attr_daily_returns2bench.cash + self.daily_return).fillna(0) + 1).cumprod()
         # 持仓本身的净值

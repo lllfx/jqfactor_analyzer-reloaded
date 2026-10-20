@@ -2,7 +2,6 @@
 
 
 import re
-import six
 import warnings
 from functools import wraps
 try:
@@ -40,7 +39,7 @@ def ignore_warning(message='', category=Warning, module='', lineno=0, append=Fal
 
 
 def ensure_tuple(x):
-    if isinstance(x, six.string_types) or not isinstance(x, Iterable):
+    if isinstance(x, str) or not isinstance(x, Iterable):
         return (x,)
     else:
         return tuple(x)

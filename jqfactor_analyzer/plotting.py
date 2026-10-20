@@ -26,8 +26,7 @@ DECIMAL_TO_BPS = 10000
 
 
 def plot_returns_table(alpha_beta, mean_ret_quantile, mean_ret_spread_quantile):
-    returns_table = pd.DataFrame()
-    returns_table = returns_table.append(alpha_beta)
+    returns_table = alpha_beta.copy()
     returns_table.loc["Mean Period Wise Return Top Quantile (bps)"] = \
         mean_ret_quantile.iloc[-1] * DECIMAL_TO_BPS
     returns_table.loc["Mean Period Wise Return Bottom Quantile (bps)"] = \
@@ -42,11 +41,11 @@ def plot_returns_table(alpha_beta, mean_ret_quantile, mean_ret_spread_quantile):
 def plot_turnover_table(autocorrelation_data, quantile_turnover, return_df=False):
     turnover_table = pd.DataFrame()
     for period in sorted(quantile_turnover.keys()):
-        for quantile, p_data in quantile_turnover[period].iteritems():
+        for quantile, p_data in quantile_turnover[period].items():
             turnover_table.loc["Quantile {} Mean Turnover ".format(quantile),
                                "{}".format(period)] = p_data.mean()
     auto_corr = pd.DataFrame()
-    for period, p_data in autocorrelation_data.iteritems():
+    for period, p_data in autocorrelation_data.items():
         auto_corr.loc["Mean Factor Rank Autocorrelation", "{}"
                       .format(period)] = p_data.mean()
 
@@ -77,8 +76,8 @@ def plot_information_table(ic_data, return_df=False):
 
 
 def plot_quantile_statistics_table(factor_data, return_df=False):
-    quantile_stats = factor_data.groupby('factor_quantile') \
-        .agg(['min', 'max', 'mean', 'std', 'count'])['factor']
+    quantile_stats = factor_data.groupby('factor_quantile')['factor'] \
+        .agg(['min', 'max', 'mean', 'std', 'count'])
     quantile_stats['count %'] = quantile_stats['count'] \
         / quantile_stats['count'].sum() * 100.
 
@@ -100,7 +99,7 @@ def plot_ic_ts(ic, ax=None):
         ax = np.asarray([ax]).flatten()
 
     ymin, ymax = (None, None)
-    for a, (period, ic) in zip(ax, ic.iteritems()):
+    for a, (period, ic) in zip(ax, ic.items()):
         period_num = period.replace('period_', '')
         ic.plot(alpha=0.7, ax=a, lw=0.7, color='steelblue')
         rolling_mean(
@@ -152,7 +151,7 @@ def plot_ic_hist(ic, ax=None):
         f, ax = plt.subplots(v_spaces, 3, figsize=(18, v_spaces * 6))
         ax = ax.flatten()
 
-    for a, (period, ic) in zip(ax, ic.iteritems()):
+    for a, (period, ic) in zip(ax, ic.items()):
         period_num = period.replace('period_', '')
         sns.distplot(ic.replace(np.nan, 0.), norm_hist=True, ax=a)
         a.set_xlim([-1, 1])
@@ -199,7 +198,7 @@ def plot_ic_qq(ic, theoretical_dist=stats.norm, ax=None):
     else:
         dist_name = ICQQ.get("CUSTOM")
 
-    for a, (period, ic) in zip(ax, ic.iteritems()):
+    for a, (period, ic) in zip(ax, ic.items()):
         period_num = period.replace('period_', '')
         qqplot(
             ic.replace(np.nan, 0.).values,
@@ -362,7 +361,7 @@ def plot_mean_quantile_returns_spread_time_series(
 
         ymin, ymax = (None, None)
         for (i, a), (name, fr_column
-                     ) in zip(enumerate(ax), mean_returns_spread.iteritems()):
+                     ) in zip(enumerate(ax), mean_returns_spread.items()):
             stdn = None if std_err is None else std_err[name]
             a = plot_mean_quantile_returns_spread_time_series(
                 fr_column, std_err=stdn, bandwidth=bandwidth, ax=a
@@ -513,7 +512,7 @@ def plot_monthly_ic_heatmap(mean_monthly_ic, ax=None):
         [new_index_year, new_index_month], names=["year", "month"]
     )
 
-    for a, (period, ic) in zip(ax, mean_monthly_ic.iteritems()):
+    for a, (period, ic) in zip(ax, mean_monthly_ic.items()):
         periods_num = period.replace('period_', '')
 
         sns.heatmap(

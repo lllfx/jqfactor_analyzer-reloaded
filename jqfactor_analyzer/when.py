@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import six
 import datetime
 
 import pandas as pd
@@ -20,7 +19,7 @@ def date2str(date, format='%Y-%m-%d'):
 
 
 def convert_date(date):
-    if isinstance(date, six.string_types):
+    if isinstance(date, str):
         if ':' in date:
             date = date[:10]
         return datetime.datetime.strptime(date, '%Y-%m-%d').date()

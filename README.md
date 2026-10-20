@@ -1,6 +1,12 @@
 # jqfactor_analyzer
 jqfactor_analyzer 是提供给用户配合 jqdatasdk 进行归因分析，因子数据缓存及单因子分析的开源工具。
 
+### 本地修改说明 (参考 alphalens-reloaded 0.4.4)
+- 兼容 pandas 1.5 / 2.2 / 3.0: 修复 `stack(dropna=)`、`groupby(axis=)`、`groupby().apply` 的 group_keys、`mean(level=)`、`DataFrame.append`、`iteritems`、`'M'` 频率别名、`mode.use_inf_as_null` 等已移除的用法
+- `jqdatasdk` 改为延迟导入: 自行传入 `prices` / `groupby` / `weights` 做单因子分析时不再需要 jqdatasdk; 去掉 `fastcache` / `cached_property` / `six` 依赖
+- 远期收益计算显式使用 `pct_change(fill_method=None)`: 价格缺失 (如停牌未填充) 时远期收益为 NaN, 不再前向填充价格 (与 pandas 3 默认一致); 如需旧行为, 传入前先对价格做 `ffill()`
+- 修复 `AttributionAnalysis.get_attr_returns2bench` 中基准写死为 `000905.XSHG` 的问题
+
 ### 安装
 ```pip install jqfactor_analyzer```
 ### 升级

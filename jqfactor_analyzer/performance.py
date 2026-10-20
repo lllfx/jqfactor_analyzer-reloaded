@@ -6,7 +6,7 @@ from scipy import stats
 import pandas as pd
 from statsmodels.api import OLS, add_constant
 
-from .compat import rolling_apply
+from .compat import rolling_apply, normalize_freq, stack_keepna
 from .prepare import demean_forward_returns, common_start_returns
 from .utils import get_forward_returns_columns
 
@@ -48,8 +48,10 @@ def factor_information_coefficient(
     if by_group:
         grouper.append('group')
 
+    # 只取计算 IC 需要的列, 避免 apply 作用在分组列 'group' 上
+    cols = ['factor'] + list(get_forward_returns_columns(factor_data.columns))
     with np.errstate(divide='ignore', invalid='ignore'):
-        ic = factor_data.groupby(grouper).apply(src_ic)
+        ic = factor_data.groupby(grouper)[cols].apply(src_ic)
 
     return ic
 
@@ -90,7 +92,7 @@ def mean_information_coefficient(
 
     grouper = []
     if by_time is not None:
-        grouper.append(pd.Grouper(freq=by_time))
+        grouper.append(pd.Grouper(freq=normalize_freq(by_time)))
     if by_group:
         grouper.append('group')
 
@@ -137,11 +139,12 @@ def factor_returns(factor_data, demeaned=True, group_adjust=False):
     if group_adjust:
         grouper.append('group')
 
-    weights = factor_data.groupby(grouper)['factor'] \
+    weights = factor_data.groupby(grouper, group_keys=False)['factor'] \
         .apply(to_weights, demeaned)
 
     if group_adjust:
-        weights = weights.groupby(level='date').apply(to_weights, False)
+        weights = weights.groupby(level='date', group_keys=False) \
+            .apply(to_weights, False)
 
     weighted_returns = \
         factor_data[get_forward_returns_columns(factor_data.columns)] \
@@ -227,16 +230,17 @@ def cumulative_returns(returns, period):
     if period == 1:
         return returns.add(1).cumprod()
     #
-    # 构建 N 个交错的投资组合
+    # 构建 N 个交错的投资组合: 第 i 期收益只归入第 i % N 个组合, 其余组合当期收益为 0,
+    # 最后一段不足 N 期时, 尚未建仓的组合为 NaN
     #
 
-    def split_portfolio(ret, period):
-        return pd.DataFrame(np.diag(ret))
-
-    sub_portfolios = returns.groupby(
-        np.arange(len(returns.index)) // period, axis=0
-    ).apply(split_portfolio, period)
-    sub_portfolios.index = returns.index
+    n = len(returns.index)
+    values = np.zeros((n, period))
+    values[np.arange(n), np.arange(n) % period] = returns.values
+    last_start = n // period * period
+    if last_start < n:
+        values[last_start:, n - last_start:] = np.nan
+    sub_portfolios = pd.DataFrame(values, index=returns.index)
 
     #
     # 将 N 期收益转换为 1 期收益, 方便计算累积收益
@@ -498,6 +502,7 @@ def average_cumulative_return_by_quantile(
 
     def average_cumulative_return(q_fact, demean_by):
         q_returns = cumulative_return(q_fact, demean_by)
+        q_returns = q_returns.replace([np.inf, -np.inf], np.nan)
         return pd.DataFrame(
             {
                 'mean': q_returns.mean(axis=1),
@@ -545,7 +550,9 @@ def average_cumulative_return_by_quantile(
                     'std': q_returns.std(axis=1)
                 }
             )
-            return q_returns.unstack(level=1).stack(level=0)
+            # 等价于旧版 pandas 的 stack(level=0) (删除全为 NaN 的行, 结果按索引排序)
+            q_returns = stack_keepna(q_returns.unstack(level=1), level=0)
+            return q_returns.dropna(how='all').sort_index().sort_index(axis=1)
         elif demeaned:
             fq = factor_data['factor_quantile']
             return fq.groupby(fq).apply(average_cumulative_return, fq)

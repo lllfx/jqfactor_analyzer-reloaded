@@ -6,17 +6,37 @@ import json
 import functools
 import logging
 from .when import today, now, TimeDelta
+from .compat import MONTH_END_FREQ
 from tqdm import tqdm
 
 
-try:
-    import jqdata
-    api = jqdata.apis
-    api_name = 'jqdata'
-except ImportError:
-    import jqdatasdk
-    api = jqdatasdk
-    api_name = 'jqdatasdk'
+class _LazyApi(object):
+    """首次访问属性时才导入 jqdata / jqdatasdk, 使离线分析 (自行传入价格数据) 不依赖 jqdatasdk"""
+
+    def __init__(self):
+        self._module = None
+        self._name = None
+
+    def _load(self):
+        if self._module is None:
+            try:
+                import jqdata
+                self._module, self._name = jqdata.apis, 'jqdata'
+            except ImportError:
+                import jqdatasdk
+                self._module, self._name = jqdatasdk, 'jqdatasdk'
+        return self._module
+
+    @property
+    def name(self):
+        self._load()
+        return self._name
+
+    def __getattr__(self, attr):
+        return getattr(self._load(), attr)
+
+
+api = _LazyApi()
 
 
 def get_cache_config():
@@ -45,7 +65,7 @@ def set_cache_dir(path):
 
 
 def get_factor_values(securities, factors=None, start_date=None, end_date=None, count=None):
-    if api_name == 'jqdatasdk':
+    if api.name == 'jqdatasdk':
         func = api.get_factor_values
     else:
         from jqfactor import get_factor_values
@@ -171,7 +191,7 @@ def save_factor_values_by_group(start_date, end_date,
     start_date = pd.to_datetime(start_date).date()
     last_day = today() - TimeDelta(days=1) if now().hour > 8 else today() - TimeDelta(days=2)
     end_date = min(pd.to_datetime(end_date).date(), last_day)
-    date_range = pd.date_range(start_date, end_date, freq='1M')
+    date_range = pd.date_range(start_date, end_date, freq=MONTH_END_FREQ)
     _date = pd.to_datetime(end_date)
     if len(date_range) == 0 or date_range[-1] < _date:
         date_range = date_range.append(pd.Index([_date]))

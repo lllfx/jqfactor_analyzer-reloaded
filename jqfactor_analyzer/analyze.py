@@ -9,8 +9,7 @@ except ImportError:
 
 import numpy as np
 import pandas as pd
-from fastcache import lru_cache
-from cached_property import cached_property
+from functools import lru_cache, cached_property
 from scipy.stats import spearmanr, pearsonr
 from scipy import stats
 
@@ -19,6 +18,7 @@ from .prepare import (get_clean_factor_and_forward_returns, rate_of_return,
                       std_conversion)
 from .plot_utils import _use_chinese
 from .utils import convert_to_forward_returns_columns, ensure_tuple
+from .compat import stack_keepna
 
 
 class FactorAnalyzer(object):
@@ -255,7 +255,7 @@ class FactorAnalyzer(object):
 
         factor_data = self.factor
         if isinstance(factor_data, pd.DataFrame):
-            factor_data = factor_data.stack(dropna=False)
+            factor_data = stack_keepna(factor_data)
 
         stocks = list(factor_data.index.get_level_values(1).drop_duplicates())
         start_date = min(factor_data.index.get_level_values(0))
@@ -600,7 +600,7 @@ class FactorAnalyzer(object):
         factor_data = self._clean_factor_data.copy()
         factor_value = factor_data['factor'].unstack('asset')
 
-        factor_data['factor'] = factor_value.shift(n).stack(dropna=True)
+        factor_data['factor'] = factor_value.shift(n).stack()
         if factor_data.dropna().empty:
             return pd.Series(np.nan, index=pef.get_forward_returns_columns(factor_data.columns))
         ac = pef.factor_information_coefficient(
@@ -608,7 +608,7 @@ class FactorAnalyzer(object):
             group_adjust=group_adjust, by_group=by_group,
             method=method
         )
-        return ac.mean(level=('group' if by_group else None))
+        return ac.groupby(level='group').mean() if by_group else ac.mean()
 
     def calc_ic_mean_n_days_lag(self, n=10, group_adjust=False, by_group=False, method=None):
         """滞后 0 - n 天因子收益信息比率(IC)的均值
@@ -627,9 +627,10 @@ class FactorAnalyzer(object):
         - 'rank': 用秩相关系数计算IC值
         - 'normal': 用普通相关系数计算IC值
         """
-        ic_mean = [self.calc_factor_information_coefficient(
+        ic = self.calc_factor_information_coefficient(
             group_adjust=group_adjust, by_group=by_group, method=method,
-        ).mean(level=('group' if by_group else None))]
+        )
+        ic_mean = [ic.groupby(level='group').mean() if by_group else ic.mean()]
 
         for lag in range(1, n + 1):
             ic_mean.append(self._calc_ic_mean_n_day_lag(
@@ -1300,7 +1301,10 @@ class FactorAnalyzer(object):
         pl.plot_events_distribution(
             events=self._clean_factor_data['factor'],
             num_days=num_days,
-            full_dates=pd.to_datetime(self.factor.index.get_level_values('date').unique())
+            full_dates=pd.to_datetime(
+                self.factor.index if isinstance(self.factor, pd.DataFrame)
+                else self.factor.index.get_level_values(0).unique()
+            )
         )
 
     def create_summary_tear_sheet(self, demeaned=False, group_adjust=False):

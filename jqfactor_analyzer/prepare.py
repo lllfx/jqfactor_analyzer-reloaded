@@ -75,7 +75,7 @@ def quantize_factor(
                 return pd.concat([pos_bins, neg_bins]).sort_index()
         except Exception as e:
             if _no_raise:
-                return pd.Series(index=x.index)
+                return pd.Series(np.nan, index=x.index)
             raise e
 
     grouper = [factor_data.index.get_level_values('date')]
@@ -84,7 +84,7 @@ def quantize_factor(
             raise ValueError('只有输入了 groupby 参数时 binning_by_group 才能为 True')
         grouper.append('group')
 
-    factor_quantile = factor_data.groupby(grouper)['factor'] \
+    factor_quantile = factor_data.groupby(grouper, group_keys=False)['factor'] \
         .apply(quantile_calc, quantiles, bins, zero_aware, no_raise)
     factor_quantile.name = 'factor_quantile'
 
@@ -132,7 +132,8 @@ def compute_forward_returns(factor,
     )
 
     for period in periods:
-        delta = prices.pct_change(period).shift(-period).reindex(factor_dateindex)
+        # 不对缺失价格做前向填充 (停牌等导致的缺失价格对应的远期收益为 NaN, 后续会被剔除)
+        delta = prices.pct_change(period, fill_method=None).shift(-period).reindex(factor_dateindex)
         forward_returns['period_{p}'.format(p=period)] = delta.stack()
 
     forward_returns.index = forward_returns.index.rename(['date', 'asset'])
@@ -167,14 +168,19 @@ def demean_forward_returns(factor_data, grouper=None):
         grouper = factor_data.index.get_level_values('date')
 
     cols = get_forward_returns_columns(factor_data.columns)
-    factor_data[cols] = factor_data.groupby(
-        grouper, as_index=False
-    )[cols.append(pd.Index(['weights']))].apply(
-        lambda x: x[cols].subtract(
-            np.average(x[cols], axis=0, weights=x['weights'].fillna(0.0).values),
-            axis=1
-        )
-    )
+    if 'weights' in factor_data.columns:
+        weights = factor_data['weights'].fillna(0.0)
+    else:
+        weights = pd.Series(1.0, index=factor_data.index)
+    # 加权均值 = sum(w * r) / sum(w), 用 transform 保持原索引
+    weighted = factor_data[cols].multiply(weights, axis=0)
+    weighted['__weights__'] = weights
+    if not isinstance(grouper, list):
+        grouper = [grouper]
+    grouper = [factor_data[g] if isinstance(g, str) else g for g in grouper]
+    sums = weighted.groupby(grouper).transform('sum')
+    weighted_mean = sums[cols].divide(sums['__weights__'], axis=0)
+    factor_data[cols] = factor_data[cols] - weighted_mean
 
     return factor_data
 
@@ -298,11 +304,11 @@ def get_clean_factor(factor,
     merged_data['factor_quantile'] = merged_data['factor_quantile'].astype(int)
 
     if 'weights' in merged_data.columns:
-        merged_data['weights'] = merged_data.set_index(
-            'factor_quantile', append=True
-        ).groupby(level=['date', 'factor_quantile'])['weights'].apply(
-            lambda s: s.divide(s.sum())
-        ).reset_index('factor_quantile', drop=True)
+        merged_data['weights'] = merged_data['weights'].divide(
+            merged_data.groupby(
+                [merged_data.index.get_level_values('date'), 'factor_quantile']
+            )['weights'].transform('sum')
+        )
 
     binning_amount = float(len(merged_data.index))
 
@@ -406,7 +412,7 @@ def common_start_returns(
     if cumulative:
         returns = prices
     else:
-        returns = prices.pct_change(axis=0)
+        returns = prices.pct_change(fill_method=None)
 
     all_returns = []
 
@@ -429,7 +435,7 @@ def common_start_returns(
             equities_slice |= set(demean_equities)
 
         series = returns.loc[returns.
-                             index[starting_index:ending_index], equities_slice]
+                             index[starting_index:ending_index], list(equities_slice)]
         series.index = range(
             starting_index - day_zero_index, ending_index - day_zero_index
         )

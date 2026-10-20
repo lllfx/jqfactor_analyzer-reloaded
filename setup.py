@@ -65,6 +65,8 @@ setup_args = dict(
         'Programming Language :: Python :: 3.7',
     ],
     install_requires=requirements,
+    # 离线分析 (自行传入价格/行业/权重数据) 不需要 jqdatasdk; 使用 DataApi / 归因分析 / 因子缓存时需要
+    extras_require={'jqdata': ['jqdatasdk', 'SQLAlchemy>=1.2.8']},
     include_package_data=True,
     package_data={'jqfactor_analyzer': ['jqfactor_analyzer/sample_data/*.csv', 'jqfactor_analyzer/config.json']},
 )

@@ -57,7 +57,10 @@ def axes_style(style='darkgrid', rc=None):
 
 def print_table(table, name=None, fmt=None):
 
-    from IPython.display import display
+    try:
+        from IPython.display import display
+    except ImportError:
+        display = print
 
     if isinstance(table, pd.Series):
         table = pd.DataFrame(table)

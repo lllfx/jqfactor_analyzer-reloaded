@@ -9,8 +9,7 @@ from decimal import Decimal
 from .utils import ignore_warning
 
 from .data import  DataApi,convert_date
-from fastcache import lru_cache
-from functools import partial
+from functools import lru_cache, partial
 from statsmodels.api import OLS, add_constant as sm_add_constant
 
 
@@ -263,10 +262,8 @@ def neutralize(data, how=None, date=None, axis=1, fillna=None, add_constant=Fals
 
     exposure = get_neu_basicdata(how, securities.tolist(), date=date)
 
-    with pd.option_context('mode.use_inf_as_null', True):
-        exposure.dropna(axis=1, how='all', inplace=True)
-        exposure.dropna(inplace=True)
-        exposure = exposure.astype(np.float64)
+    exposure = exposure.astype(np.float64).replace([np.inf, -np.inf], np.nan)
+    exposure = exposure.dropna(axis=1, how='all').dropna()
 
     if exposure.empty:
         return data

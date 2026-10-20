@@ -3,8 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from fastcache import lru_cache
-from functools import partial
+from functools import lru_cache, partial
 import pyarrow.feather as feather
 
 from .when import date2str, convert_date, today, now, Time, Date
