@@ -115,8 +115,9 @@ class DataApi(object):
         if price in valid_price:
             self.price = price
         else:
-            ValueError("invalid 'price' parameter, "
-                       "should be one of %s" % str(valid_price))
+            raise ValueError(
+                "invalid 'price' parameter, should be one of %s" % str(valid_price)
+            )
 
         valid_fq = ('post', 'pre', None)
         if fq in valid_fq:
@@ -395,7 +396,7 @@ class DataApi(object):
                 q = query(valuation.code, valuation.circulating_market_cap).filter(
                     valuation.code.in_(securities))
             else:
-                raise ValueError("不支持的字段 : {}".foramt(field))
+                raise ValueError("不支持的字段 : {}".format(field))
 
         if self.show_progress:
             trade_days = tqdm(trade_days, desc="load cap info : ")
